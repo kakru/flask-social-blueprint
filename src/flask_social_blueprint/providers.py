@@ -3,7 +3,8 @@
 from importlib import import_module
 import logging
 
-from flask_oauth import OAuthRemoteApp
+from flask_oauthlib.client import OAuthRemoteApp
+from flask_oauthlib.client import OAuth
 from flask_babel import gettext as _
 
 DEFAULT_PROPERTIES = ("user_id", "display_name", "first_name", "last_name", "email", "image_url")
@@ -69,49 +70,46 @@ class Google(BaseProvider):
     def __init__(self, *args, **kwargs):
         defaults = {
             'name': 'Google',
-            'base_url': 'https://www.google.com/accounts/',
-            'authorize_url': 'https://accounts.google.com/o/oauth2/auth',
-            'access_token_url': 'https://accounts.google.com/o/oauth2/token',
-            'request_token_url': None,
-            'access_token_method': 'POST',
-            'access_token_params': {
-                'grant_type': 'authorization_code'
-            },
             'request_token_params': {
-                'response_type': 'code',
-                'scope': 'https://www.googleapis.com/auth/plus.me email'
-            }
+                'scope': 'email'
+            },
+            'access_token_url': 'https://accounts.google.com/o/oauth2/token',
+            'authorize_url': 'https://accounts.google.com/o/oauth2/auth',
         }
         defaults.update(kwargs)
         super(Google, self).__init__(*args, **defaults)
 
     def get_profile(self, raw_data):
-        access_token = raw_data['access_token']
-        import oauth2client.client as googleoauth
-        import apiclient.discovery as googleapi
-        import httplib2
-
-        credentials = googleoauth.AccessTokenCredentials(
-            access_token=access_token,
-            user_agent=''
+        oauth = OAuth()
+        google = oauth.remote_app(
+            'google',
+            consumer_key=self.consumer_key,
+            consumer_secret=self.consumer_secret,
+            request_token_params={
+                'scope': 'email'
+            },
+            base_url='https://www.googleapis.com/oauth2/v1/',
+            request_token_url=None,
+            access_token_method='POST',
+            access_token_url='https://accounts.google.com/o/oauth2/token',
+            authorize_url='https://accounts.google.com/o/oauth2/auth',
         )
-        http = httplib2.Http()
-        http = credentials.authorize(http)
-        api = googleapi.build('plus', 'v1', http=http)
-        profile = api.people().get(userId='me').execute()
-        name = profile.get('name')
+        google.authorize(callback='http://dev.example.com:5000/_social/callback/Google', _external=True)
+        access_token = raw_data['access_token']
+        profile = google.get('userinfo', token=(access_token, '')).data
         data = {
             'provider': "Google",
             'profile_id': profile['id'],
             'username': None,
-            "email": profile.get('emails')[0]["value"],
-            'access_token': access_token,
+            "email": profile['email'],
+            'access_token': raw_data['access_token'],
             'secret': None,
-            "first_name": name.get("givenName"),
-            "last_name": name.get("familyName"),
-            'cn': profile.get('displayName'),
-            'profile_url': profile.get('url'),
-            'image_url': profile.get('image', {}).get("url")
+            "first_name": profile.get("given_name"),
+            "last_name": profile.get("family_name"),
+            'cn': profile.get('name'),
+            'profile_url': None,
+            'image_url': profile.get('picture', None),
+            # profile['gender']
         }
         return ExternalProfile(str(profile['id']), data, raw_data)
 
