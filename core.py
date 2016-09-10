@@ -5,7 +5,7 @@ from flask import Blueprint, url_for, request, current_app, session
 from flask_login import login_user, current_user
 from flask_security.utils import do_flash
 from flask_babel import gettext as _
-from flask_oauth import OAuthException
+from flask_oauthlib.client import OAuthException
 
 from werkzeug.exceptions import abort
 from werkzeug.local import LocalProxy
@@ -19,7 +19,7 @@ class SocialBlueprint(Blueprint):
         super(SocialBlueprint, self).__init__(name, import_name, *args, **kwargs)
         self.connection_adapter = connection_adapter
         self.providers = providers or {}
-	self.login_redirect_url = login_redirect_url
+        self.login_redirect_url = login_redirect_url
 
     def get_provider(self, provider_name):
         provider = self.providers[provider_name]
@@ -104,9 +104,10 @@ class SocialBlueprint(Blueprint):
 
     @classmethod
     def init_bp(cls, app, connection_adapter, *args, **kwargs):
-        config = app.config.get("SOCIAL_BLUEPRINT")
+        import website.settings.base
+        config = website.settings.base.SOCIAL_BLUEPRINT
         providers = cls.setup_providers(config)
-	login_redirect_url = app.config.get("SECURITY_POST_LOGIN_VIEW")
+        login_redirect_url = app.config.get("SECURITY_POST_LOGIN_VIEW")
         if login_redirect_url is None:
             login_redirect_url = '/'
         bp = cls.create_bp('social', connection_adapter, providers, login_redirect_url, *args, **kwargs)
@@ -114,4 +115,3 @@ class SocialBlueprint(Blueprint):
 
 
 bp = LocalProxy(lambda: current_app.blueprints[request.blueprint])
-
